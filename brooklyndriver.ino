@@ -21,6 +21,7 @@ uint8_t led_b = 11;
 uint8_t cid;      // Component ID
 uint8_t nparams;  // Num Parameters
 uint8_t header;
+uint8_t packet;
 
 // LED Constants
 #define LED_RED 1
@@ -66,9 +67,9 @@ void setLED(uint8_t color) {
   }
 }
 
-void sendSPI(int cs, char c) {
+void sendSPI(int cs, uint8_t c[], uint8_t buffsize) {
     digitalWrite(cs, LOW);
-    SPI.transfer(c);
+    SPI.transfer(c, buffsize);
     digitalWrite(cs, HIGH);
 }
 
@@ -79,19 +80,24 @@ void waitForByte() {
 // the loop routine runs over and over again forever:
 void loop() {
   while(Serial.available()) {
+    setLED(LED_BLUE);
     header = Serial.read();                       // Get new byte
-    cid =  componentId_mask & header;             // Extract component ID (3 bit)
-    sendSPI(ss[cid], header);                     // Transmit to proper uC
+    cid =  componentId_mask & header;  // Extract component ID (3 bit)
     
     waitForByte();                                // Wait till next byte
-    nparams = Serial.read();                      // Get number of parameters
-    sendSPI(ss[cid], nparams);                    // Transmit nparams to proper uC
+    nparams = (uint8_t)Serial.read();                      // Get number of parameters
+
+    uint8_t buff[2+nparams];
+    buff[0] = header;
+    buff[1] = nparams;
 
     // Forward all parameters
     for(int i = 0; i < nparams; i++) {            
       waitForByte();                              // Wait till next byte
-      sendSPI(ss[cid], Serial.read());            // Send to proper uC
+      buff[2+i] = Serial.read();
     }
+    
+    sendSPI(ss[cid], buff, nparams+2);
   }
 }
 
