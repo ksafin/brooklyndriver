@@ -1,3 +1,5 @@
+#include <Chrono.h>
+#include <LightChrono.h>
 #include <SPI.h>
 #include "pins_arduino.h"
 
@@ -23,7 +25,12 @@ uint8_t nparams;  // Num Parameters
 uint8_t header;
 uint8_t packet;
 
+// Heartbeat
+Chrono hb;
+boolean hb_state = true;
+
 // LED Constants
+#define LED_OFF 0
 #define LED_RED 1
 #define LED_GREEN 2
 #define LED_BLUE 3
@@ -44,15 +51,34 @@ void setup() {
   pinMode(led_g, OUTPUT);
   pinMode(led_r, OUTPUT);
   pinMode(led_b, OUTPUT);
-  setLED(LED_GREEN);
 
   // Initialize SPI
   SPI.begin ();
   SPI.setClockDivider(SPI_CLOCK_DIV8);
+
+  // Wait for init packet from master
+  // Init = 10101010
+  setLED(LED_RED);
+  uint8_t init = 0;
+  while(init != 170) {
+    waitForByte();
+    init = Serial.read();
+  }
+
+  // Indicate handshake success for 2 seconds
+  setLED(LED_BLUE);
+  delay(2000);
+  Serial.write(170);
+  setLED(LED_OFF);
+  hb.restart();
 }
 
 void setLED(uint8_t color) {
-  if(color == LED_RED) {
+  if(color == LED_OFF) {
+    digitalWrite(led_g, HIGH);
+    digitalWrite(led_r, HIGH);
+    digitalWrite(led_b, HIGH);
+  } else if(color == LED_RED) {
     digitalWrite(led_g, HIGH);
     digitalWrite(led_r, LOW);
     digitalWrite(led_b, HIGH);
@@ -77,27 +103,44 @@ void waitForByte() {
   while (!Serial.available()) {};
 }
 
+void heartBeat() {
+  if(hb.hasPassed(500)) {
+    digitalWrite(led_g, hb_state);
+    hb_state = !hb_state;
+    hb.restart();
+  }
+}
+
 // the loop routine runs over and over again forever:
 void loop() {
   while(Serial.available()) {
-    setLED(LED_BLUE);
+    uint8_t checksum = 0;
     header = Serial.read();                       // Get new byte
     cid =  componentId_mask & header;  // Extract component ID (3 bit)
+    //checksum = header;
     
     waitForByte();                                // Wait till next byte
     nparams = (uint8_t)Serial.read();                      // Get number of parameters
+    //checksum = checksum + nparams * 10;
 
+    //uint8_t buff[3+nparams];
     uint8_t buff[2+nparams];
     buff[0] = header;
     buff[1] = nparams;
 
+    uint8_t byte;
     // Forward all parameters
     for(int i = 0; i < nparams; i++) {            
       waitForByte();                              // Wait till next byte
-      buff[2+i] = Serial.read();
+      byte = Serial.read();
+      buff[2+i] = byte;
+      //checksum += byte % 10;
     }
-    
+
+    //buff[nparams + 2] = checksum;
+    //sendSPI(ss[cid], buff, nparams+3);
     sendSPI(ss[cid], buff, nparams+2);
   }
+  heartBeat();
 }
 
