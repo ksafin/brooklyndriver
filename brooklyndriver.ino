@@ -54,7 +54,7 @@ void setup() {
 
   // Initialize SPI
   SPI.begin ();
-  SPI.setClockDivider(SPI_CLOCK_DIV8);
+  SPI.setClockDivider(SPI_CLOCK_DIV32);
 
   // Wait for init packet from master
   // Init = 10101010
@@ -116,6 +116,7 @@ void loop() {
   while(Serial.available()) {
     uint8_t checksum = 0;
     header = Serial.read();                       // Get new byte
+    
     cid =  componentId_mask & header;  // Extract component ID (3 bit)
     //checksum = header;
     
@@ -131,13 +132,11 @@ void loop() {
     uint8_t byte;
     // Forward all parameters
     for(int i = 0; i < nparams; i++) {            
-      waitForByte();                              // Wait till next byte
-      byte = Serial.read();
-      buff[2+i] = byte;
+      waitForByte();   
+      buff[2+i] = Serial.read();
       //checksum += byte % 10;
     }
 
-    //buff[nparams + 2] = checksum;
     //sendSPI(ss[cid], buff, nparams+3);
     sendSPI(ss[cid], buff, nparams+2);
   }
